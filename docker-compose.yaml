@@ -1,0 +1,110 @@
+version: "3"
+
+services:
+  primary:
+    image: crunchydata/crunchy-postgres:centos7-10.9-2.4.1
+    hostname: primary
+    environment:
+      - PGHOST=/tmp
+      - MAX_CONNECTIONS=10
+      - MAX_WAL_SENDERS=5
+      - PG_MODE=primary
+      - PG_PRIMARY_USER=primaryuser
+      - PG_PRIMARY_PASSWORD=password
+      - PG_DATABASE=testdb
+      - PG_USER=testuser
+      - PG_PASSWORD=password
+      - PG_ROOT_PASSWORD=password
+      - PG_PRIMARY_PORT=5432
+    networks:
+      pgsql-ha:
+    volumes: 
+      - ./data/primary:/pgdata
+
+  replica:
+    image: crunchydata/crunchy-postgres:centos7-10.9-2.4.1
+    hostname: replica
+    environment:
+      - PGHOST=/tmp
+      - MAX_CONNECTIONS=10
+      - MAX_WAL_SENDERS=5
+      - PG_MODE=replica
+      - PG_PRIMARY_HOST=primary
+      - PG_PRIMARY_PORT=5432
+      - PG_PRIMARY_USER=primaryuser
+      - PG_PRIMARY_PASSWORD=password
+      - PG_DATABASE=testdb
+      - PG_USER=testuser
+      - PG_PASSWORD=password
+      - PG_ROOT_PASSWORD=password
+    networks:
+      pgsql-ha:
+    depends_on:
+      - primary
+    volumes:
+     - ./data/replica:/pgdata
+
+  pgpool:
+    image: crunchydata/crunchy-pgpool:centos7-10.9-2.4.1
+    hostname: pgpool
+    environment:
+      - PG_PRIMARY_SERVICE_NAME=primary
+      - PG_REPLICA_SERVICE_NAME=replica
+      - PG_USERNAME=testuser
+      - PG_PASSWORD=password
+      - PG_DATABASE=postgres
+    ports:
+      - 12003:5432
+    networks:
+      pgsql-ha:
+    depends_on:
+      - primary
+      - replica
+
+
+  # monitoring
+  collect:
+    image: crunchydata/crunchy-collect:centos7-10.9-2.4.1
+    hostname: collect
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:password@primary:5432/postgres?sslmode=disable
+    networks:
+      pgsql-ha:
+    depends_on:
+      - primary
+      - replica
+
+  prometheus:
+    image: crunchydata/crunchy-prometheus:centos7-10.9-2.4.1
+    hostname: prometheus
+    environment:
+      - COLLECT_HOST=collect
+      - SCRAPE_INTERVAL=5s
+      - SCRAPE_TIMEOUT=5s
+    ports:
+     - 9090:9090
+    networks:
+      pgsql-ha:
+    depends_on:
+      - collect
+
+  grafana:
+    image: crunchydata/crunchy-grafana:centos7-10.9-2.4.1
+    hostname: grafana
+    environment:
+      - ADMIN_USER=admin
+      - ADMIN_PASS=password
+      - PROM_HOST=prometheus
+      - PROM_PORT=9090
+      - CRUNCHY_DEBUG=true
+    ports:
+     - 3000:3000
+    networks:
+      pgsql-ha:
+    depends_on:
+      - collect
+
+
+networks:
+  pgsql-ha:
+
