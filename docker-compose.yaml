@@ -1,6 +1,22 @@
 version: "3"
 
 services:
+  app:
+    image: pgsqlhademo/app:0.1
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    hostname: app
+    environment:
+     - DB_USER=testuser
+     - DB_PASSWORD=password
+     - DB_HOST=pgpool
+     - DB_NAME=testdb
+    networks:
+      pgsql-ha:
+    depends_on:
+      - pgpool
+
   primary:
     image: crunchydata/crunchy-postgres:centos7-10.9-2.4.1
     hostname: primary
@@ -18,7 +34,7 @@ services:
       - PG_PRIMARY_PORT=5432
     networks:
       pgsql-ha:
-    volumes: 
+    volumes:
       - ./data/primary:/pgdata
 
   replica:
@@ -52,7 +68,7 @@ services:
       - PG_REPLICA_SERVICE_NAME=replica
       - PG_USERNAME=testuser
       - PG_PASSWORD=password
-      - PG_DATABASE=postgres
+      - PG_DATABASE=testdb
     ports:
       - 12003:5432
     networks:
@@ -61,13 +77,12 @@ services:
       - primary
       - replica
 
-
   # monitoring
   collect:
     image: crunchydata/crunchy-collect:centos7-10.9-2.4.1
     hostname: collect
     environment:
-      - DATA_SOURCE_NAME=postgresql://postgres:password@primary:5432/postgres?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://testuser:password@pgpool:5432/postgres?sslmode=disable
     networks:
       pgsql-ha:
     depends_on:
@@ -103,7 +118,6 @@ services:
       pgsql-ha:
     depends_on:
       - collect
-
 
 networks:
   pgsql-ha:

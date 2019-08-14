@@ -1,0 +1,35 @@
+version: "3"
+
+services:
+  db:
+    image: postgres:10-alpine
+    hostname: db
+    environment:
+      - POSTGRES_DB=test
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+    ports:
+      - 5432:5432
+    networks:
+      app:
+  app:
+    image: pgsqlhademo/app:0.1
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    hostname: app
+    networks:
+      app:
+  pgadm:                                     
+    image: dpage/pgadmin4:4
+    container_name: pgadm                    
+    environment:                             
+      - PGADMIN_DEFAULT_EMAIL=admin@demo.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:                                   
+      - "8083:80"
+    networks:
+      app:
+
+networks:
+  app:
