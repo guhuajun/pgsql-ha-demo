@@ -1,13 +1,33 @@
 version: "3"
 
 services:
+  app:
+    image: pgsqlhademo/app:0.1
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    hostname: app
+    environment:
+     - DB_USER=testuser
+     - DB_PASSWORD=password
+     - DB_HOST=pgpool
+     - DB_NAME=testdb
+    networks:
+      pgsql-ha:
+    depends_on:
+      - pgpool
+
   primary:
     image: crunchydata/crunchy-postgres:centos7-10.9-2.4.1
     hostname: primary
     environment:
       - PGHOST=/tmp
       - MAX_CONNECTIONS=10
-      - MAX_WAL_SENDERS=5
+      - TEMP_BUFFERS=9MB
+      - MAX_CONNECTIONS=101
+      - SHARED_BUFFERS=129MB
+      - MAX_WAL_SENDERS=7
+      - WORK_MEM=5MB
       - PG_MODE=primary
       - PG_PRIMARY_USER=primaryuser
       - PG_PRIMARY_PASSWORD=password
@@ -18,16 +38,17 @@ services:
       - PG_PRIMARY_PORT=5432
     networks:
       pgsql-ha:
-    volumes: 
-      - ./data/primary:/pgdata
 
   replica:
     image: crunchydata/crunchy-postgres:centos7-10.9-2.4.1
-    hostname: replica
     environment:
       - PGHOST=/tmp
       - MAX_CONNECTIONS=10
-      - MAX_WAL_SENDERS=5
+      - TEMP_BUFFERS=9MB
+      - MAX_CONNECTIONS=101
+      - SHARED_BUFFERS=129MB
+      - MAX_WAL_SENDERS=7
+      - WORK_MEM=5MB
       - PG_MODE=replica
       - PG_PRIMARY_HOST=primary
       - PG_PRIMARY_PORT=5432
@@ -41,8 +62,6 @@ services:
       pgsql-ha:
     depends_on:
       - primary
-    volumes:
-     - ./data/replica:/pgdata
 
   pgpool:
     image: crunchydata/crunchy-pgpool:centos7-10.9-2.4.1
@@ -52,7 +71,7 @@ services:
       - PG_REPLICA_SERVICE_NAME=replica
       - PG_USERNAME=testuser
       - PG_PASSWORD=password
-      - PG_DATABASE=postgres
+      - PG_DATABASE=testdb
     ports:
       - 12003:5432
     networks:
@@ -61,13 +80,24 @@ services:
       - primary
       - replica
 
+  # admin
+  pgadm:                                     
+    image: dpage/pgadmin4:4
+    container_name: pgadm                    
+    environment:                             
+      - PGADMIN_DEFAULT_EMAIL=admin@demo.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:                                   
+      - "8083:80"
+    networks:
+      pgsql-ha:
 
   # monitoring
   collect:
     image: crunchydata/crunchy-collect:centos7-10.9-2.4.1
     hostname: collect
     environment:
-      - DATA_SOURCE_NAME=postgresql://postgres:password@primary:5432/postgres?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://testuser:password@pgpool:5432/postgres?sslmode=disable
     networks:
       pgsql-ha:
     depends_on:
@@ -103,7 +133,6 @@ services:
       pgsql-ha:
     depends_on:
       - collect
-
 
 networks:
   pgsql-ha:
